@@ -144,7 +144,8 @@ Streamable HTTP and holds no Xero credentials: every request brings its own acce
 XERO_MCP_TRANSPORT=http XERO_MCP_HTTP_HOST=0.0.0.0 XERO_MCP_HTTP_PORT=3000 node dist/index.js
 ```
 
-- `POST /mcp` with `Authorization: Bearer <Xero access token>` (401 without one). Request the scopes listed under
+- `POST /mcp` with `Authorization: Bearer <Xero access token>`. Tool calls without a token get 401; discovery
+  (`initialize`, `tools/list`, `ping`) works without one, so gateways can health-check and list tools. Request the scopes listed under
   Bearer Token above, plus `offline_access` so the gateway can refresh.
 - Optional `Xero-Tenant-Id` header picks the organisation; otherwise the token's first connection is used.
 - `GET /health` for health checks. Stateless: no sessions, nothing stored between requests.

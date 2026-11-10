@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { BearerTokenXeroClient, requestXeroClient, xeroClient } from "../xero-client.js";
 
@@ -14,14 +14,12 @@ describe("xeroClient request scoping", () => {
 
   it("binds methods to the request's client", async () => {
     const client = new BearerTokenXeroClient({ bearerToken: "request-token", perRequest: true });
-    let self: unknown;
-    client.authenticate = async function (this: unknown) {
-      self = this;
-    };
+    const spy = vi.spyOn(client, "authenticate").mockResolvedValue(undefined);
 
     await requestXeroClient.run(client, () => xeroClient.authenticate());
 
-    expect(self).toBe(client);
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.contexts[0]).toBe(client);
   });
 
   it("keeps concurrent requests apart", async () => {

@@ -13,6 +13,7 @@ const MAX_BODY_BYTES = 10 * 1024 * 1024;
  * Streamable HTTP mode. Each request carries its own Xero access token in `Authorization: Bearer <token>`
  * (for example from an MCP gateway that runs the Xero OAuth flow), so no Xero credentials live on this server.
  * An optional `Xero-Tenant-Id` header picks the organisation; otherwise the token's first connection is used.
+ * Only `tools/call` requires the token; discovery requests are answered without one.
  * Stateless: a fresh MCP server and transport per request.
  */
 export async function startHttpServer(host: string, port: number): Promise<void> {
@@ -44,17 +45,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  const body = await readJson(req);
   const token = bearerToken(req);
-  if (!token) {
+  // Discovery (initialize, tools/list, ping...) never calls Xero, so it is served without a token: gateways
+  // health-check and list tools without a user's token. Tool calls need one.
+  if (!token && callsTools(body)) {
     res.writeHead(401, { "Content-Type": "application/json", "WWW-Authenticate": "Bearer" });
     res.end(JSON.stringify(jsonRpcError("Missing Authorization: Bearer <Xero access token>")));
     return;
   }
 
-  const body = await readJson(req);
   const tenantHeader = req.headers["xero-tenant-id"];
   const client = new BearerTokenXeroClient({
-    bearerToken: token,
+    // No token only reaches here for discovery, which does not touch the client
+    bearerToken: token ?? "",
     tenantId: typeof tenantHeader === "string" && tenantHeader ? tenantHeader : undefined,
     perRequest: true,
   });
@@ -69,6 +73,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   await mcp.connect(transport);
   await requestXeroClient.run(client, () => transport.handleRequest(req, res, body));
+}
+
+function callsTools(body: unknown): boolean {
+  const messages = Array.isArray(body) ? body : [body];
+  return messages.some((m) => (m as { method?: unknown } | null)?.method === "tools/call");
 }
 
 function bearerToken(req: IncomingMessage): string | undefined {
